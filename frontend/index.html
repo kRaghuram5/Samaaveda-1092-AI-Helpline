@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samaaveda | AI Helpline 1092</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    
+    <!-- 1. TOP PIPELINE BAR -->
+    <div class="pipeline-container">
+        <div class="step active" id="step-listening"><i>1</i> LISTENING</div>
+        <div class="step" id="step-transcribing"><i>2</i> TRANSCRIBING</div>
+        <div class="step" id="step-thinking"><i>3</i> THINKING</div>
+        <div class="step" id="step-verifying"><i>4</i> VERIFYING</div>
+        <div class="step" id="step-final"><i>5</i> AGENT ACTION</div>
+    </div>
+
+    <div id="app">
+        <!-- 2. CITIZEN VIEW (LEFT) -->
+        <aside class="citizen-panel">
+            <div class="panel-header">
+                <h3>👤 CITIZEN VIEW</h3>
+                <p class="stat-label">Caller Interface</p>
+            </div>
+
+            <div class="lang-selector">
+                <button class="lang-btn active" data-lang="auto">Auto</button>
+                <button class="lang-btn" data-lang="kn">ಕನ್ನಡ</button>
+                <button class="lang-btn" data-lang="hi">हिंदी</button>
+                <button class="lang-btn" data-lang="en">ENG</button>
+            </div>
+
+            <div class="mic-section">
+                <canvas id="visualizer"></canvas>
+                <button id="mic-btn"><i class="fas fa-microphone"></i></button>
+                <p id="status-text">Ready to assist</p>
+            </div>
+
+            <div class="citizen-preview">
+                <div class="lang-badge" id="citizen-lang">KANNADA</div>
+                <p id="live-transcript-preview" style="font-style: italic; color: var(--text-dim);">Speak to begin...</p>
+                
+                <!-- NEW: CORRECTION AREA -->
+                <div id="correction-area" style="display: none; margin-top: 15px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
+                    <p class="stat-label" style="color: var(--danger);">What did we get wrong?</p>
+                    <input type="text" id="citizen-correction-input" placeholder="Type correction here..." style="width: 100%; padding: 8px; background: #161b22; border: 1px solid var(--danger); color: white; border-radius: 4px; margin-top: 5px;">
+                    <button id="btn-submit-correction" class="v-btn" style="margin-top: 10px; font-size: 0.7rem; padding: 5px;">SUBMIT CORRECTION</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 3. AGENT DASHBOARD (RIGHT) -->
+        <main class="agent-dashboard">
+            
+            <div class="main-content">
+                <!-- LIVE TRANSCRIPT -->
+                <div class="reasoning-card">
+                    <div class="stat-label">📝 Live Transcript</div>
+                    <div id="full-transcript" style="font-size: 1.1rem; margin-top: 10px; line-height: 1.6;">
+                        Waiting for caller...
+                    </div>
+                </div>
+
+                <!-- AI REASONING (The "Brain" Visibility) -->
+                <div class="reasoning-card" id="ai-reasoning-box">
+                    <div class="stat-label">🧠 AI Reasoning Engine <span class="thinking-pulse" id="thinking-indicator" style="display:none;"></span></div>
+                    <div class="reasoning-list" id="reasoning-log">
+                        <div class="reason-item"><span>Status:</span> Idle</div>
+                    </div>
+                </div>
+
+                <!-- STRUCTURED SUMMARY (EDITABLE) -->
+                <div class="reasoning-card">
+                    <div class="stat-label">📋 Structured Summary</div>
+                    <div class="summary-grid" style="margin-top: 15px;">
+                        <div class="field-group">
+                            <label>INTENT</label>
+                            <input type="text" id="field-intent" placeholder="...">
+                        </div>
+                        <div class="field-group">
+                            <label>ISSUE TYPE</label>
+                            <input type="text" id="field-issue-type" placeholder="...">
+                        </div>
+                        <div class="field-group">
+                            <label>LOCATION</label>
+                            <input type="text" id="field-location" placeholder="...">
+                        </div>
+                        <div class="field-group">
+                            <label>DURATION</label>
+                            <input type="text" id="field-duration" placeholder="...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VERIFICATION LOOP (THE WINNING FEATURE) -->
+                <div class="verification-card" id="verification-loop" style="display: none;">
+                    <div class="stat-label" style="color: var(--accent-blue);"><i class="fas fa-sync"></i> AI CONFIRMATION PROMPT</div>
+                    <div class="v-sentence" id="confirmation-sentence">---</div>
+                    <div class="v-actions">
+                        <button class="v-btn correct" id="btn-correct"><i class="fas fa-check"></i> CORRECT</button>
+                        <button class="v-btn" id="btn-partial"><i class="fas fa-adjust"></i> PARTIAL</button>
+                        <button class="v-btn" id="btn-wrong"><i class="fas fa-times"></i> WRONG</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIDEBAR METADATA -->
+            <aside class="metadata-sidebar">
+                <div class="stat-card" id="confidence-card">
+                    <div class="stat-label">AI Confidence</div>
+                    <div class="stat-val" id="confidence-val">0%</div>
+                    <div class="stat-label" id="confidence-status">--</div>
+                </div>
+
+                <div class="stat-card" id="urgency-card">
+                    <div class="stat-label">Urgency</div>
+                    <div class="stat-val val-low" id="urgency-val">LOW</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Emotion</div>
+                    <div class="stat-val" id="emotion-val">NEUTRAL</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Suggested Action</div>
+                    <div id="suggested-action" style="font-weight: 600; color: var(--accent-blue);">WAITING...</div>
+                </div>
+
+                <button id="escalate-btn" class="v-btn" style="background: var(--danger); border: none; margin-top: auto;">
+                    <i class="fas fa-headset"></i> ESCALATE TO HUMAN
+                </button>
+            </aside>
+
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/websocket.js"></script>
+    <script src="js/visualizer.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/citizen.js"></script>
+    <script src="js/agent.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
