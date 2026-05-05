@@ -12,27 +12,8 @@ logger = logging.getLogger(__name__)
 
 class LLMProcessor:
     def __init__(self):
-        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        genai.configure(api_key=GEMINI_API_KEY)
         self.model_id = "gemini-1.5-flash"
-        
-        try:
-            # Get available models
-            available = []
-            for m in self.client.models.list():
-                name = m.name.split('/')[-1]
-                available.append(name)
-            
-            logger.info(f"Available models: {available}")
-            
-            # Use gemini-1.5-flash (most stable)
-            if "gemini-1.5-flash" in available:
-                self.model_id = "gemini-1.5-flash"
-            elif available:
-                self.model_id = available[0]
-                
-        except Exception as e:
-            logger.error(f"Model detection error: {e}")
-        
         logger.info(f"Using model: {self.model_id}")
 
     
@@ -74,12 +55,11 @@ Return ONLY VALID JSON (no markdown, no extra text):
         for attempt in range(max_retries + 1):
             try:
                 logger.info(f"API Call attempt {attempt + 1}, model: {self.model_id}")
-                
                 # Direct API call with error handling
                 try:
-                    logger.info("Calling client.models.generate_content...")
+                    logger.info("Calling genai.generate_content...")
                     response = await asyncio.to_thread(
-                        self.client.models.generate_content,
+                        genai.generate_content,
                         model=self.model_id,
                         contents=prompt
                     )
@@ -87,34 +67,36 @@ Return ONLY VALID JSON (no markdown, no extra text):
                 except Exception as api_error:
                     logger.error(f"API call failed: {api_error}")
                     raise api_error
-                
                 # Extract text from response
                 try:
                     logger.info(f"Response object type: {type(response)}, dir: {[x for x in dir(response) if not x.startswith('_')][:5]}")
-                    
                     if isinstance(response, str):
                         text = response.strip()
                         logger.info("Response is string")
                     elif hasattr(response, 'text'):
                         text = response.text.strip()
                         logger.info("Response has .text attribute")
+                    elif hasattr(response, 'candidates') and response.candidates:
+                        # google-generativeai returns .candidates[0].content.parts[0].text
+                        try:
+                            text = response.candidates[0].content.parts[0].text.strip()
+                            logger.info("Extracted text from candidates")
+                        except Exception as e:
+                            logger.error(f"Failed to extract from candidates: {e}")
+                            text = str(response)
                     else:
                         text = str(response).strip()
                         logger.info("Converting response to string")
-                    
                     logger.info(f"Extracted text ({len(text)} chars): {text[:200]}...")
                 except Exception as extract_error:
                     logger.error(f"Failed to extract text from response: {extract_error}")
                     raise extract_error
-                
                 # Clean JSON if wrapped in markdown
                 if "```" in text:
-                    text = text.split("```")[1]
+                    text = text.split("```')[1]
                     if text.startswith("json"):
                         text = text[4:].strip()
-                
                 logger.info(f"Cleaned JSON: {text[:200]}...")
-                
                 # Parse JSON
                 try:
                     result = json.loads(text)
@@ -132,7 +114,6 @@ Return ONLY VALID JSON (no markdown, no extra text):
                         "impact": "medium",
                         "confirmation_sentence": transcript
                     }
-                
                 # Ensure all fields exist
                 required_fields = {
                     "intent": "Issue reported",
@@ -144,26 +125,21 @@ Return ONLY VALID JSON (no markdown, no extra text):
                     "impact": "medium",
                     "confirmation_sentence": "Thank you for reporting."
                 }
-                
                 for field, default in required_fields.items():
                     if field not in result or not result[field]:
                         logger.warning(f"Missing field '{field}', using default: {default}")
                         result[field] = default
-                
                 logger.info(f"Final Result: {result}")
                 return result
-                
             except Exception as e:
                 error_str = str(e)
                 logger.error(f"Process Error: {error_str}")
-                
                 # Retry on 503 (service unavailable)
                 if "503" in error_str and attempt < max_retries:
                     delay = 3 * (attempt + 1)  # 3s, 6s
                     logger.warning(f"Service temporarily unavailable (503). Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(delay)
                     continue
-                
                 # Any other error - return fallback
                 logger.error(f"API Error: {e}")
                 return self._fallback(transcript, str(e))
