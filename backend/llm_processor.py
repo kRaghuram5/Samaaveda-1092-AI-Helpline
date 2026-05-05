@@ -93,7 +93,7 @@ Return ONLY VALID JSON (no markdown, no extra text):
                     raise extract_error
                 # Clean JSON if wrapped in markdown
                 if "```" in text:
-                    text = text.split("```')[1]
+                    text = text.split("```")[1]
                     if text.startswith("json"):
                         text = text[4:].strip()
                 logger.info(f"Cleaned JSON: {text[:200]}...")
