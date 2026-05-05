@@ -5,6 +5,8 @@ class SamaavedaApp {
     constructor() {
         this.currentStep = 'listening';
         this.isProcessing = false; // Guard against multiple clicks
+        this.demoMode = false;
+        this.wakingUpTimer = null;
         this.init();
     }
 
@@ -26,6 +28,12 @@ class SamaavedaApp {
         window.wsClient.on('escalation_alert', (data) => this.handleEscalation(data));
         window.wsClient.on('agent_action_result', (data) => this.handleActionResult(data));
         window.wsClient.on('verification_result', (data) => this.handleVerificationResult(data));
+        
+        // Demo mode toggle
+        const demoBtn = document.getElementById('demo-mode-btn');
+        if (demoBtn) {
+            demoBtn.onclick = () => this.toggleDemoMode();
+        }
         
         console.log('[App] Initialized and connected to socket events.');
     }
@@ -136,9 +144,46 @@ class SamaavedaApp {
         setTimeout(() => indicator.style.display = 'none', 1000);
     }
 
+    toggleDemoMode() {
+        this.demoMode = !this.demoMode;
+        const btn = document.getElementById('demo-mode-btn');
+        if (btn) {
+            btn.innerText = this.demoMode ? '🎬 Demo Mode ON' : '🎬 Demo Mode OFF';
+            btn.style.background = this.demoMode ? 'rgba(76,175,80,0.2)' : 'rgba(255,165,0,0.2)';
+            btn.style.borderColor = this.demoMode ? '#4CAF50' : '#ffa500';
+            btn.style.color = this.demoMode ? '#4CAF50' : '#ffa500';
+        }
+        console.log(`[App] Demo mode: ${this.demoMode}`);
+        
+        if (this.demoMode) {
+            // Fill UI with demo data
+            this.handleSummary({
+                data: {
+                    intent: "Water supply issue causing inconvenience to residents",
+                    issue_type: "water_supply",
+                    location: "Residential Area, Demo Ward",
+                    duration: "12 hours",
+                    emotion: "concern",
+                    urgency_level: "HIGH",
+                    impact: "high",
+                    _is_mock: true
+                }
+            });
+            this.handleEmotion({
+                primary_emotion: "CONCERN",
+                urgency_level: "HIGH",
+                distress_indicators: ["urgent_tone"]
+            });
+            this.addReasoning('Demo', '✅ Demo mode activated - using mock data');
+        }
+    }
+
     handleStatus(data) {
         console.log('[App] handleStatus:', data);
         document.getElementById('status-text').innerText = data.message;
+        
+        // Clear waking up message when backend responds
+        if (this.wakingUpTimer) clearTimeout(this.wakingUpTimer);
         
         if (data.state === 'recording') this.updatePipeline('listening');
         if (data.state === 'processing') {
@@ -178,11 +223,23 @@ class SamaavedaApp {
             
             this.addReasoning('Transcription', `Detected ${data.language} with ${Math.round(data.confidence * 100)}% confidence`);
             this.updatePipeline('thinking');
+            
+            // Start waking up timer if backend is slow
+            if (!this.wakingUpTimer) {
+                this.wakingUpTimer = setTimeout(() => {
+                    this.addReasoning('System', '⏳ Backend waking up... please wait 10-20 seconds');
+                }, 2000);
+            }
         }
     }
 
     handleSummary(data) {
         console.log('[App] handleSummary called with:', data);
+        
+        // In demo mode, just show the mock data
+        if (this.demoMode && data.data._is_mock) {
+            this.addReasoning('Demo', '📋 Using demo data (API not called)');
+        }
         
         const d = data.data;
         console.log('[App] Extracted data:', d);

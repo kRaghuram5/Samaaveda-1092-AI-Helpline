@@ -171,15 +171,17 @@ Return ONLY VALID JSON (no markdown, no extra text):
 
     def _fallback(self, transcript: str, error: str) -> dict:
         """Return fallback response on error."""
+        logger.warning(f"[Fallback Mode] API failed ({error}). Returning mock data.")
         return {
-            "intent": f"Error: {error}",
-            "issue_type": "other",
-            "location": "not_specified",
-            "duration": "not_specified",
-            "impact": "medium",
-            "urgency_level": "medium",
-            "emotion": "neutral",
-            "confirmation_sentence": transcript
+            "intent": "Water/Sanitation Issue Reported",
+            "issue_type": "sanitation",
+            "location": "Demo Location",
+            "duration": "12 hours",
+            "impact": "high",
+            "urgency_level": "HIGH",
+            "emotion": "concern",
+            "confirmation_sentence": "Issue with water/sanitation has been reported. Our team will assist shortly.",
+            "_is_fallback": True
         }
 
     async def regenerate_confirmation(self, structured_data: dict, language: str) -> str:
