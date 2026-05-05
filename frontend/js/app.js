@@ -89,15 +89,14 @@ class SamaavedaApp {
         finalStep.innerHTML = '<i>5</i> <span>Final Action</span>';
         finalStep.classList.remove('val-high', 'finished');
         
-        // 10. Re-enable all buttons
-        document.getElementById('btn-correct').disabled = false;
-        document.getElementById('btn-correct').style.opacity = '';
-        document.getElementById('btn-partial').disabled = false;
-        document.getElementById('btn-partial').style.opacity = '';
-        document.getElementById('btn-wrong').disabled = false;
-        document.getElementById('btn-wrong').style.opacity = '';
-        document.getElementById('escalate-btn').disabled = false;
-        document.getElementById('escalate-btn').style.opacity = '';
+        // 10. Re-enable all buttons safely
+        ['btn-correct', 'btn-partial', 'btn-wrong', 'escalate-btn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '';
+            }
+        });
         
         // 11. Reset processing flag
         this.isProcessing = false;
@@ -447,24 +446,6 @@ class SamaavedaApp {
         
         this.addReasoning('System', `🚨 ESCALATED: ${data.reason}`);
         this.addReasoning('Action', 'Connecting to emergency dispatcher...');
-        
-        // Save to localStorage and redirect
-        const caseData = {
-            intent: document.getElementById('field-intent').value || 'Not extracted',
-            issueType: document.getElementById('field-issue-type').value || 'Unknown',
-            location: document.getElementById('field-location').value || 'Unknown',
-            duration: document.getElementById('field-duration').value || 'Unknown',
-            urgency: document.getElementById('urgency-val').innerText,
-            confidence: document.getElementById('confidence-val').innerText,
-            sentiment: document.getElementById('emotion-val').innerText,
-            state: 'ESCALATED'
-        };
-        localStorage.setItem('final_case_data', JSON.stringify(caseData));
-        
-        // Wait 2.5s so agent can see the escalation text, then redirect
-        setTimeout(() => {
-            window.location.href = '/final';
-        }, 2500);
     }
 
     handleActionResult(data) {

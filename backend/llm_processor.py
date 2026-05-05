@@ -85,7 +85,7 @@ Return ONLY VALID JSON (no markdown, no extra text):
                     )
                     logger.info(f"API Response received: {type(response)}")
                 except Exception as api_error:
-                    logger.error(f"API call failed: {api_error}", exc_info=True)
+                    logger.error(f"API call failed: {api_error}")
                     raise api_error
                 
                 # Extract text from response
@@ -104,7 +104,7 @@ Return ONLY VALID JSON (no markdown, no extra text):
                     
                     logger.info(f"Extracted text ({len(text)} chars): {text[:200]}...")
                 except Exception as extract_error:
-                    logger.error(f"Failed to extract text from response: {extract_error}", exc_info=True)
+                    logger.error(f"Failed to extract text from response: {extract_error}")
                     raise extract_error
                 
                 # Clean JSON if wrapped in markdown

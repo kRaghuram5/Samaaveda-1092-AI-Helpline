@@ -58,8 +58,11 @@ class CitizenUI {
             const ok = await window.audioCapture.start(this.selectedLanguage);
             if (ok) {
                 document.getElementById('mic-btn').classList.add('recording');
-                document.getElementById('status-text').innerText = 'Listening...';
-                document.getElementById('live-transcript-preview').innerText = 'Listening to your voice...';
+                const statusTxt = document.getElementById('status-text');
+                if (statusTxt) statusTxt.innerText = 'Listening...';
+                
+                const livePreview = document.getElementById('full-transcript');
+                if (livePreview) livePreview.innerText = 'Listening to your voice...';
             }
         } catch (err) {
             console.error('Mic start error:', err);
