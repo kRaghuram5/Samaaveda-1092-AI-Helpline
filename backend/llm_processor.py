@@ -13,54 +13,99 @@ logger = logging.getLogger(__name__)
 class LLMProcessor:
     def __init__(self):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
-        # Default to most stable and cost-effective model
         self.model_id = "gemini-1.5-flash"
         
         try:
-            # Optionally check if gemini-1.5-flash is indeed available
-            available = [m.name.split('/')[-1] for m in self.client.models.list()]
-            logger.info(f"Connected to Gemini API. Available: {available[:5]}...")
+            # Get available models
+            available = []
+            for m in self.client.models.list():
+                name = m.name.split('/')[-1]
+                available.append(name)
             
-            if "gemini-1.5-flash" not in available and available:
+            logger.info(f"Available models: {available}")
+            
+            # Use gemini-1.5-flash (most stable)
+            if "gemini-1.5-flash" in available:
+                self.model_id = "gemini-1.5-flash"
+            elif available:
                 self.model_id = available[0]
-                logger.warning(f"gemini-1.5-flash not found. Using fallback: {self.model_id}")
                 
         except Exception as e:
-            logger.error(f"Model verification failed: {e}. Using default: {self.model_id}")
+            logger.error(f"Model detection error: {e}")
         
-        logger.info(f"LLM Engine ready. Model: {self.model_id}")
-
+        logger.info(f"Using model: {self.model_id}")
 
     
     async def process_transcript(self, transcript: str, language: str = "en") -> dict:
-        """Simple direct API call with basic retry for 503 errors."""
+        """Simple API call with better prompt to extract all details."""
         
-        # Basic simple prompt
-        prompt = f"""Analyze this request:
+        logger.info(f"process_transcript called with language={language}, transcript length={len(transcript)}")
+        
+        prompt = f"""Analyze this citizen complaint carefully:
 "{transcript}"
 
-Return JSON:
+Extract:
+1. Intent: What is the main issue?
+2. Issue Type: water_supply|electricity|health|sanitation|other
+3. Location: Where exactly?
+4. Duration: How long has this been happening? (Look for time words: hours, days, weeks, since)
+5. Urgency Level: 
+   - LOW: Minor inconvenience
+   - MEDIUM: Affects daily life, some risk
+   - HIGH: Serious problem, health/safety risk, mentions "urgent/critical"
+   - CRITICAL: Immediate danger, flooding, fire, children at risk
+6. Emotion: Based on tone - neutral, concern, frustration, distress, fear, anger
+7. Impact: low|medium|high (based on scope and harm)
+
+Return ONLY VALID JSON (no markdown, no extra text):
 {{
-  "intent": "Summary",
-  "issue_type": "water_supply|electricity|health|sanitation|other",
-  "location": "City/area",
+  "intent": "One line summary",
+  "issue_type": "category",
+  "location": "specific place",
+  "duration": "Extract time (e.g., '12 hours', '3 days', 'ongoing')",
+  "urgency_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "emotion": "neutral|concern|frustration|distress|fear|anger",
   "impact": "low|medium|high",
-  "urgency_level": "low|medium|high|critical",
-  "confirmation_sentence": "Simple confirmation"
+  "confirmation_sentence": "1-2 sentence confirmation of the issue"
 }}"""
         
         # Retry logic only for 503 (service unavailable)
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                # Direct API call
-                response = await asyncio.to_thread(
-                    self.client.models.generate_content,
-                    model=self.model_id,
-                    contents=prompt
-                )
+                logger.info(f"API Call attempt {attempt + 1}, model: {self.model_id}")
                 
-                text = response.text.strip()
+                # Direct API call with error handling
+                try:
+                    logger.info("Calling client.models.generate_content...")
+                    response = await asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model=self.model_id,
+                        contents=prompt
+                    )
+                    logger.info(f"API Response received: {type(response)}")
+                except Exception as api_error:
+                    logger.error(f"API call failed: {api_error}", exc_info=True)
+                    raise api_error
+                
+                # Extract text from response
+                try:
+                    logger.info(f"Response object type: {type(response)}, dir: {[x for x in dir(response) if not x.startswith('_')][:5]}")
+                    
+                    if isinstance(response, str):
+                        text = response.strip()
+                        logger.info("Response is string")
+                    elif hasattr(response, 'text'):
+                        text = response.text.strip()
+                        logger.info("Response has .text attribute")
+                    else:
+                        text = str(response).strip()
+                        logger.info("Converting response to string")
+                    
+                    logger.info(f"Extracted text ({len(text)} chars): {text[:200]}...")
+                except Exception as extract_error:
+                    logger.error(f"Failed to extract text from response: {extract_error}", exc_info=True)
+                    raise extract_error
                 
                 # Clean JSON if wrapped in markdown
                 if "```" in text:
@@ -68,11 +113,49 @@ Return JSON:
                     if text.startswith("json"):
                         text = text[4:].strip()
                 
-                result = json.loads(text)
+                logger.info(f"Cleaned JSON: {text[:200]}...")
+                
+                # Parse JSON
+                try:
+                    result = json.loads(text)
+                    logger.info(f"LLM Parsed JSON: {result}")
+                except json.JSONDecodeError as je:
+                    logger.error(f"JSON Parse Error: {je}. Text was: {text[:300]}")
+                    # Return structured fallback if JSON fails
+                    return {
+                        "intent": transcript[:100],
+                        "issue_type": "other",
+                        "location": "not_specified",
+                        "duration": "not_specified",
+                        "urgency_level": "medium",
+                        "emotion": "neutral",
+                        "impact": "medium",
+                        "confirmation_sentence": transcript
+                    }
+                
+                # Ensure all fields exist
+                required_fields = {
+                    "intent": "Issue reported",
+                    "issue_type": "other",
+                    "location": "not_specified",
+                    "duration": "not_specified",
+                    "urgency_level": "medium",
+                    "emotion": "neutral",
+                    "impact": "medium",
+                    "confirmation_sentence": "Thank you for reporting."
+                }
+                
+                for field, default in required_fields.items():
+                    if field not in result or not result[field]:
+                        logger.warning(f"Missing field '{field}', using default: {default}")
+                        result[field] = default
+                
+                logger.info(f"Final Result: {result}")
                 return result
                 
             except Exception as e:
                 error_str = str(e)
+                logger.error(f"Process Error: {error_str}")
                 
                 # Retry on 503 (service unavailable)
                 if "503" in error_str and attempt < max_retries:
@@ -92,22 +175,16 @@ Return JSON:
             "intent": f"Error: {error}",
             "issue_type": "other",
             "location": "not_specified",
+            "duration": "not_specified",
             "impact": "medium",
             "urgency_level": "medium",
+            "emotion": "neutral",
             "confirmation_sentence": transcript
         }
 
     async def regenerate_confirmation(self, structured_data: dict, language: str) -> str:
-        """Simple regeneration without retry."""
-        prompt = f"Write 1 sentence confirmation for: {json.dumps(structured_data)}"
-        
-        try:
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
-                model=self.model_id,
-                contents=prompt
-            )
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"Regeneration error: {e}")
-            return "Updated."
+        """Return confirmation without API call - just use the existing one."""
+        # Don't make API call - use the confirmation_sentence from structured data
+        if 'confirmation_sentence' in structured_data:
+            return structured_data['confirmation_sentence']
+        return "Understood. Thank you for reporting."

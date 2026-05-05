@@ -9,6 +9,13 @@ class SamaavedaApp {
     }
 
     init() {
+        // Check if WebSocket client is available
+        if (!window.wsClient) {
+            console.warn('[App] WebSocket client not available, retrying in 100ms');
+            setTimeout(() => this.init(), 100);
+            return;
+        }
+
         // Event Listeners for WebSocket events
         window.wsClient.on('status', (data) => this.handleStatus(data));
         window.wsClient.on('transcript_update', (data) => this.handleTranscript(data));
@@ -46,8 +53,11 @@ class SamaavedaApp {
         document.getElementById('citizen-correction-input').value = '';
         
         // 4. Clear all transcript displays
-        document.getElementById('full-transcript').innerText = 'Waiting for caller...';
-        document.getElementById('live-transcript-preview').innerText = 'Awaiting voice input...';
+        const fullTranscript = document.getElementById('full-transcript');
+        if (fullTranscript) fullTranscript.innerText = 'Waiting for caller...';
+        
+        const livePreview = document.getElementById('live-transcript-preview');
+        if (livePreview) livePreview.innerText = 'Awaiting voice input...';
         
         // 5. Reset all stats to default
         document.getElementById('confidence-val').innerText = '0%';
@@ -110,49 +120,25 @@ class SamaavedaApp {
 
     addReasoning(key, value) {
         const log = document.getElementById('reasoning-log');
+        const item = document.createElement('div');
+        item.className = 'reason-item';
+        item.innerHTML = `<span>${key}:</span> ${value}`;
+        log.prepend(item);
         
-        // Check if key already exists in the log
-        let existingItem = null;
+        // Keep only last 8 items to prevent stacking
         const items = log.querySelectorAll('.reason-item');
-        for (const item of items) {
-            const span = item.querySelector('span');
-            if (span && span.innerText.includes(key)) {
-                existingItem = item;
-                break;
-            }
-        }
-
-        if (existingItem) {
-            // Update existing item with animation
-            existingItem.style.opacity = '0.5';
-            existingItem.innerHTML = `<span>${key}:</span> ${value}`;
-            setTimeout(() => existingItem.style.opacity = '1', 50);
-            
-            // Move to top to show it's the latest update
-            log.prepend(existingItem);
-        } else {
-            // Create new item
-            const item = document.createElement('div');
-            item.className = 'reason-item';
-            item.innerHTML = `<span>${key}:</span> ${value}`;
-            log.prepend(item);
-            
-            // Limit total items
-            if (items.length >= 6) {
-                items[items.length - 1].remove();
-            }
+        if (items.length > 8) {
+            items[items.length - 1].remove();
         }
         
         // Pulse the indicator
         const indicator = document.getElementById('thinking-indicator');
-        if (indicator) {
-            indicator.style.display = 'inline-block';
-            setTimeout(() => indicator.style.display = 'none', 1000);
-        }
+        indicator.style.display = 'inline-block';
+        setTimeout(() => indicator.style.display = 'none', 1000);
     }
 
-
     handleStatus(data) {
+        console.log('[App] handleStatus:', data);
         document.getElementById('status-text').innerText = data.message;
         
         if (data.state === 'recording') this.updatePipeline('listening');
@@ -164,6 +150,16 @@ class SamaavedaApp {
             this.updatePipeline('thinking');
             this.addReasoning('LLM', 'Starting semantic analysis...');
         }
+        if (data.state === 'verified') {
+            console.log('[App] Analysis complete, clearing processing flag');
+            this.isProcessing = false;
+            this.updatePipeline('verifying');
+            this.addReasoning('System', '✓ Analysis complete');
+            
+            // Show verification UI
+            document.getElementById('verification-loop').style.display = 'flex';
+            document.getElementById('verification-loop').style.borderColor = '#ffb800';
+        }
         if (data.state === 'awaiting_verification') {
             this.updatePipeline('verifying');
             this.addReasoning('Logic', 'Matching against Vector Memory...');
@@ -172,9 +168,14 @@ class SamaavedaApp {
 
     handleTranscript(data) {
         if (data.is_final) {
-            document.getElementById('full-transcript').innerText = data.text;
-            document.getElementById('live-transcript-preview').innerText = data.text;
-            document.getElementById('citizen-lang').innerText = data.language.toUpperCase();
+            const ft = document.getElementById('full-transcript');
+            if (ft) ft.innerText = data.text;
+            
+            const ltp = document.getElementById('live-transcript-preview');
+            if (ltp) ltp.innerText = data.text;
+            
+            const cl = document.getElementById('citizen-lang');
+            if (cl) cl.innerText = data.language.toUpperCase();
             
             this.addReasoning('Transcription', `Detected ${data.language} with ${Math.round(data.confidence * 100)}% confidence`);
             this.updatePipeline('thinking');
@@ -182,32 +183,70 @@ class SamaavedaApp {
     }
 
     handleSummary(data) {
-        const d = data.data;
-        document.getElementById('field-intent').value = d.intent;
-        document.getElementById('field-issue-type').value = d.issue_type;
-        document.getElementById('field-location').value = d.location;
-        document.getElementById('field-duration').value = d.duration;
+        console.log('[App] handleSummary called with:', data);
         
-        this.addReasoning('Extracted', `Intent: ${d.issue_type} | Location: ${d.location}`);
+        const d = data.data;
+        console.log('[App] Extracted data:', d);
+        
+        document.getElementById('field-intent').value = d.intent || '';
+        document.getElementById('field-issue-type').value = d.issue_type || '';
+        document.getElementById('field-location').value = d.location || '';
+        document.getElementById('field-duration').value = d.duration || 'not_specified';
+        
+        console.log(`[App] Updated fields: intent=${d.intent}, duration=${d.duration}`);
+        
+        this.addReasoning('Extracted', `Intent: ${d.issue_type} | Location: ${d.location} | Duration: ${d.duration || 'N/A'}`);
+        
+        // Update emotion and urgency from LLM output
+        if (d.emotion) {
+            document.getElementById('emotion-val').innerText = d.emotion.toUpperCase();
+        }
+        if (d.urgency_level) {
+            const urgencyEl = document.getElementById('urgency-val');
+            urgencyEl.innerText = d.urgency_level.toUpperCase();
+            
+            // Color code urgency
+            urgencyEl.className = 'stat-val';
+            if (d.urgency_level === 'critical' || d.urgency_level === 'CRITICAL') {
+                urgencyEl.classList.add('val-high');
+                document.getElementById('urgency-card').classList.add('urgency-high');
+            } else if (d.urgency_level === 'high' || d.urgency_level === 'HIGH') {
+                urgencyEl.classList.add('val-high');
+                document.getElementById('urgency-card').classList.add('urgency-high');
+            } else {
+                urgencyEl.classList.add('val-low');
+            }
+        }
+        
         if (d.dialect_notes) this.addReasoning('Dialect', d.dialect_notes);
     }
 
     handleEmotion(data) {
+        console.log('[App] handleEmotion called with:', data);
+        
         const emotionEl = document.getElementById('emotion-val');
         const urgencyEl = document.getElementById('urgency-val');
         const urgencyCard = document.getElementById('urgency-card');
 
-        emotionEl.innerText = data.primary.toUpperCase();
-        urgencyEl.innerText = data.urgency_level.toUpperCase();
+        // Use primary_emotion not primary
+        const emotion = data.primary_emotion || data.primary || 'NEUTRAL';
+        const urgency = data.urgency_level || 'low';
+
+        console.log(`[App] Setting emotion=${emotion}, urgency=${urgency}`);
+        
+        emotionEl.innerText = emotion.toUpperCase();
+        urgencyEl.innerText = urgency.toUpperCase();
         
         // Remove classes
         urgencyEl.className = 'stat-val';
         urgencyCard.classList.remove('urgency-high');
 
-        if (data.urgency_level === 'high' || data.urgency_level === 'critical') {
+        if (urgency === 'high' || urgency === 'critical') {
             urgencyEl.classList.add('val-high');
             urgencyCard.classList.add('urgency-high');
             this.addReasoning('Alert', 'High Urgency detected in voice sentiment');
+        } else if (urgency === 'medium') {
+            urgencyEl.classList.add('val-medium');
         } else {
             urgencyEl.classList.add('val-low');
         }
@@ -259,10 +298,9 @@ class SamaavedaApp {
             finalStep.innerHTML = '<i>5</i> <span>CONFIRMED</span>';
             
             this.addReasoning('System', '✓ DATA VALIDATED - Finalizing case...');
-            this.addReasoning('Action', 'Case details synchronized with command center.');
             
-            // Auto-reset after 3 seconds
-            setTimeout(() => this.resetUIForNewCase(), 3000);
+            // Show submit dialog
+            this.showSubmitDialog();
             
         } else if (data.action === 're_process') {
             // Entering confirmation loop
@@ -272,7 +310,7 @@ class SamaavedaApp {
             
             this.addReasoning('Loop', 'Discrepancy detected. Entering correction loop...');
             this.addReasoning('AI', 'Awaiting citizen input to refine extraction.');
-            
+
             // Visual feedback on the card
             const vCard = document.getElementById('verification-loop');
             vCard.style.borderColor = 'var(--warning)';
@@ -284,10 +322,110 @@ class SamaavedaApp {
             // Re-enable buttons if they were disabled
             ['btn-correct', 'btn-partial', 'btn-wrong'].forEach(id => {
                 const btn = document.getElementById(id);
-                btn.disabled = false;
-                btn.style.opacity = '';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                }
             });
         }
+    }
+
+    showSubmitDialog() {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+        
+        // Create dialog
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            background: var(--glass-bg);
+            border: 2px solid var(--accent-green);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            text-align: center;
+            color: white;
+            font-family: Inter, sans-serif;
+        `;
+        
+        dialog.innerHTML = `
+            <h2 style="margin-bottom: 15px; font-size: 1.5rem;">✓ Submit Case</h2>
+            <p style="margin-bottom: 30px; font-size: 1.1rem; color: #aaa;">
+                Ready to forward this case to the human agent?
+            </p>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="submit-yes" style="
+                    background: linear-gradient(135deg, #00ff88, #00bd65);
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 10px;
+                    color: black;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-size: 1rem;
+                ">✓ SUBMIT</button>
+                <button id="submit-no" style="
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.3);
+                    padding: 12px 30px;
+                    border-radius: 10px;
+                    color: white;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-size: 1rem;
+                ">✗ KEEP REVIEWING</button>
+            </div>
+        `;
+        
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        
+        // Handle YES
+        document.getElementById('submit-yes').addEventListener('click', () => {
+            this.addReasoning('Agent', '✓ Forwarding to human agent...');
+            
+            // Send to backend
+            window.wsClient.sendJSON({
+                type: 'agent_submit_case',
+                action: 'submit_to_human_agent'
+            });
+            
+            // Remove dialog
+            overlay.remove();
+            
+            // Save data to localStorage
+            const caseData = {
+                intent: document.getElementById('field-intent').value,
+                issueType: document.getElementById('field-issue-type').value,
+                location: document.getElementById('field-location').value,
+                duration: document.getElementById('field-duration').value,
+                urgency: document.getElementById('urgency-val').innerText,
+                confidence: document.getElementById('confidence-val').innerText,
+                sentiment: document.getElementById('emotion-val').innerText,
+                state: 'SUBMITTED'
+            };
+            localStorage.setItem('final_case_data', JSON.stringify(caseData));
+            
+            // Redirect to final page
+            window.location.href = '/final';
+        });
+        
+        // Handle NO
+        document.getElementById('submit-no').addEventListener('click', () => {
+            overlay.remove();
+            document.getElementById('verification-loop').style.display = 'block';
+        });
     }
 
 
@@ -310,8 +448,23 @@ class SamaavedaApp {
         this.addReasoning('System', `🚨 ESCALATED: ${data.reason}`);
         this.addReasoning('Action', 'Connecting to emergency dispatcher...');
         
-        // Reset UI after 4 seconds (longer for user to see the result)
-        setTimeout(() => this.resetUIForNewCase(), 4000);
+        // Save to localStorage and redirect
+        const caseData = {
+            intent: document.getElementById('field-intent').value || 'Not extracted',
+            issueType: document.getElementById('field-issue-type').value || 'Unknown',
+            location: document.getElementById('field-location').value || 'Unknown',
+            duration: document.getElementById('field-duration').value || 'Unknown',
+            urgency: document.getElementById('urgency-val').innerText,
+            confidence: document.getElementById('confidence-val').innerText,
+            sentiment: document.getElementById('emotion-val').innerText,
+            state: 'ESCALATED'
+        };
+        localStorage.setItem('final_case_data', JSON.stringify(caseData));
+        
+        // Wait 2.5s so agent can see the escalation text, then redirect
+        setTimeout(() => {
+            window.location.href = '/final';
+        }, 2500);
     }
 
     handleActionResult(data) {
@@ -323,11 +476,28 @@ class SamaavedaApp {
         const finalStep = document.getElementById('step-final');
         finalStep.classList.add('finished');
         finalStep.innerHTML = '<i>5</i> <span>RESOLVED</span>';
-        
-        // Reset UI after 3 seconds
-        setTimeout(() => this.resetUIForNewCase(), 3000);
     }
 }
 
 
-window.app = new SamaavedaApp();
+try {
+    window.app = new SamaavedaApp();
+    console.log('[App] SamaavedaApp instance created successfully');
+} catch (error) {
+    console.error('[App] Failed to create SamaavedaApp:', error);
+    // Create a dummy app object so the rest of the app can still run
+    window.app = {
+        handleSummary: () => {},
+        handleEmotion: () => {},
+        handleStatus: () => {},
+        handleTranscript: () => {},
+        handleConfidence: () => {},
+        handleVerification: () => {},
+        handleEscalation: () => {},
+        handleActionResult: () => {},
+        handleVerificationResult: () => {},
+        addReasoning: () => {},
+        updatePipeline: () => {},
+        resetUIForNewCase: () => {}
+    };
+}

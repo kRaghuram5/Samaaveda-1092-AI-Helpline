@@ -11,13 +11,15 @@ DISTRESS_KEYWORDS = {
     "en": ["help", "emergency", "urgent", "dying", "please", "desperate",
            "suffering", "terrible", "worst", "dangerous", "scared", "afraid", "panic",
            "flooding", "flowing", "entering", "kids", "children", "broken pipe",
-           "water", "electricity", "power", "current", "no supply"],
+           "water", "electricity", "power", "current", "no supply", "unpleasant", "overflow",
+           "sewage", "dirty", "filthy"],
     "hi": ["madad", "bachao", "jaldi", "mushkil", "takleef", "pareshani",
            "dar", "khatra", "madat", "sahayata", "khatarnak", "baadh", "paani ghus raha",
-           "bijli", "paani", "current nahi"],
+           "bijli", "paani", "current nahi", "asahiya", "gandha", "sulag"],
     "kn": ["sahaya", "bega", "tumba", "kashta", "sankate", "bhaya", "apaaya",
            "doddadu", "tondare", "neeru nuuguttide", "makkalu", "manege",
-           "current", "vidyut", "neeru", "illa"],
+           "current", "vidyut", "neeru", "illa", "jaldi", "asahiya", "gandha",
+           "harialikka", "tetri", "tetry", "hariali"],  # Added Kannada variants
 }
 
 ANGER_KEYWORDS = {
@@ -70,29 +72,35 @@ class EmotionDetector:
         """Weighted combination of LLM emotion + keyword heuristics + STT confidence."""
 
         severity_map = {
-            "neutral": 0.1, "confusion": 0.3, "frustration": 0.5,
-            "sadness": 0.5, "anger": 0.7, "fear": 0.8,
-            "distress": 0.9, "urgency": 0.85,
+            "neutral": 0.1, "concern": 0.4, "confusion": 0.3, "frustration": 0.6,
+            "sadness": 0.5, "anger": 0.7, "fear": 0.8, "distress": 0.9, 
+            "urgency": 0.85, "panic": 0.95,
         }
         urgency_map = {"low": 0.2, "medium": 0.5, "high": 0.8, "critical": 1.0}
 
-        primary = llm_emotion.get("primary", "neutral")
+        # Get emotion - could be "emotion" key or "primary" key
+        primary = (llm_emotion.get("emotion") or llm_emotion.get("primary") or "neutral").lower()
         llm_sev = severity_map.get(primary, 0.3)
-        llm_urg = urgency_map.get(llm_emotion.get("urgency_level", "medium"), 0.5)
+        
+        # Get urgency level from LLM
+        llm_urg_str = (llm_emotion.get("urgency_level") or "medium").lower()
+        llm_urg = urgency_map.get(llm_urg_str, 0.5)
 
-        combined_severity = (llm_sev * 0.6
-                             + keyword_analysis["distress_score"] * 0.2
-                             + keyword_analysis["anger_score"] * 0.2)
-        combined_urgency = llm_urg * 0.6 + keyword_analysis["urgency_score"] * 0.4
+        logger.info(f"Emotion: {primary}, Severity: {llm_sev}, Urgency: {llm_urg_str}")
 
-        # --- URGENCY BOOSTER (The Edge Case Fix) ---
-        booster_words = ["nuuguttide", "nuuguttidd", "flooding", "children", "makkalu", "manege", "entering", 
-                         "urgent", "emergency", "die", "death", "sattoguttare"]
-        if any(word in keyword_analysis["matched_keywords"] for word in booster_words) or \
-           any(word in llm_emotion.get("distress_indicators", []) for word in booster_words) or \
-           any(re.search(r"\b(" + word + r")\b", text_lower := keyword_analysis.get("raw_text", "")) for word in booster_words):
-            combined_urgency = max(combined_urgency, 0.95) # Force to Critical
-            logger.info("Urgency Booster triggered: Property/Safety risk detected.")
+        # Boost if LLM already detected high urgency
+        if llm_urg >= 0.8:  # If LLM says CRITICAL or HIGH
+            combined_urgency = 1.0 if llm_urg >= 0.9 else 0.85
+        else:
+            combined_urgency = llm_urg * 0.6 + keyword_analysis["urgency_score"] * 0.4
+
+        # Also boost emotion if keywords show distress
+        if keyword_analysis["distress_score"] > 0.5:
+            combined_severity = max(llm_sev, 0.7)  # At least HIGH severity
+        else:
+            combined_severity = (llm_sev * 0.6
+                                 + keyword_analysis["distress_score"] * 0.2
+                                 + keyword_analysis["anger_score"] * 0.2)
 
         overall_confidence = stt_confidence * 0.4 + (1 - combined_severity * 0.3) * 0.6
 
@@ -108,11 +116,9 @@ class EmotionDetector:
             reasons.append("Critical urgency level")
         if stt_confidence < 0.4:
             reasons.append("Low speech recognition confidence")
-        if overall_confidence < 0.5:
-            reasons.append("Low overall understanding confidence")
 
         # Convert score back to level for UI
-        if combined_urgency >= 0.8:
+        if combined_urgency >= 0.9:
             urgency_level = "critical"
         elif combined_urgency >= 0.6:
             urgency_level = "high"
@@ -123,7 +129,7 @@ class EmotionDetector:
 
         return {
             "primary_emotion": primary,
-            "secondary_emotion": llm_emotion.get("secondary"),
+            "secondary_emotion": llm_emotion.get("secondary_emotion"),
             "severity_score": round(combined_severity, 3),
             "urgency_score": round(combined_urgency, 3),
             "urgency_level": urgency_level,

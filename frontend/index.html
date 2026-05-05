@@ -12,18 +12,13 @@
 </head>
 <body>
     
-    <!-- 1. TOP PIPELINE BAR -->
-    <nav class="pipeline-container">
-        <div class="step active" id="step-listening"><i>1</i> <span>Listening</span></div>
-        <div class="step" id="step-transcribing"><i>2</i> <span>Transcribing</span></div>
-        <div class="step" id="step-thinking"><i>3</i> <span>Reasoning</span></div>
-        <div class="step" id="step-verifying"><i>4</i> <span>Verifying</span></div>
-        <div class="step" id="step-final"><i>5</i> <span>Final Action</span></div>
-    </nav>
+    <header class="top-header">
+        <h1>Samaaveda AI Helpline</h1>
+    </header>
 
-    <div id="app">
-        <!-- 2. CITIZEN VIEW (LEFT) -->
-        <aside class="citizen-panel">
+    <div id="app-container">
+        <!-- 1. LEFT COLUMN: Static, only MIC, language, and Transcript -->
+        <aside class="col-left">
             <div class="panel-header">
                 <h3><i class="fas fa-user-shield"></i> CITIZEN VIEW</h3>
                 <p class="stat-label">Secure Caller Interface</p>
@@ -37,55 +32,55 @@
             </div>
 
             <div class="mic-section">
+                <!-- Spikes/animation above mic -->
                 <canvas id="visualizer"></canvas>
                 <button id="mic-btn" title="Click to speak">
                     <i class="fas fa-microphone"></i>
                 </button>
                 <p id="status-text">System Ready</p>
             </div>
-
-            <div class="citizen-preview">
-                <div class="stat-label" style="color: var(--accent-secondary);">Live Transcript</div>
-                <p id="live-transcript-preview" style="font-size: 0.95rem; line-height: 1.5; color: var(--text-dim);">Awaiting voice input...</p>
-                
-                <!-- CORRECTION AREA -->
-                <div id="correction-area" style="display: none; margin-top: 20px; animation: slideIn 0.3s ease;">
-                    <p class="stat-label" style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> What did we get wrong?</p>
-                    <input type="text" id="citizen-correction-input" placeholder="Enter correction here..." autocomplete="off">
-                    <button id="btn-submit-correction" class="v-btn" style="margin-top: 10px; font-size: 0.8rem; border-color: var(--danger); background: rgba(255, 65, 108, 0.1);">
-                        SUBMIT CORRECTION
-                    </button>
+            
+            <!-- LIVE TRANSCRIPT MOVED BELOW MIC -->
+            <section class="reasoning-card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; margin-top: 10px;">
+                <div class="stat-label"><i class="fas fa-comment-dots"></i> Live Transcript / Incoming Stream</div>
+                <div id="full-transcript" style="font-size: 1.1rem; font-weight: 500; line-height: 1.5; color: white; overflow-y: auto; flex: 1; padding-right: 5px;">
+                    Waiting for caller...
                 </div>
-            </div>
+            </section>
         </aside>
 
-        <!-- 3. AGENT DASHBOARD (RIGHT) -->
-        <main class="agent-dashboard">
-            
-            <div class="main-content">
-                <!-- LIVE TRANSCRIPT -->
-                <section class="reasoning-card">
-                    <div class="stat-label"><i class="fas fa-comment-dots"></i> Incoming Stream</div>
-                    <div id="full-transcript" style="font-size: 1.2rem; font-weight: 500; line-height: 1.6; color: white;">
-                        Waiting for caller...
+        <!-- 2. MIDDLE COLUMN: Stats, Structured Info, Verification -->
+        <main class="col-middle">
+            <div class="middle-scrollable">
+
+                <!-- STATS GRID -->
+                <section class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-label">AI Confidence</div>
+                        <div class="stat-val" id="confidence-val">0%</div>
+                        <p class="stat-label" id="confidence-status" style="margin-top: 0;">--</p>
+                    </div>
+
+                    <div class="stat-card" id="urgency-card">
+                        <div class="stat-label">Urgency Level</div>
+                        <div class="stat-val val-low" id="urgency-val">LOW</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-label">Sentiment / Emotion</div>
+                        <div class="stat-val" id="emotion-val">NEUTRAL</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-label">Suggested Workflow</div>
+                        <div id="suggested-action" style="font-weight: 700; color: var(--accent-secondary); margin-top: 10px;">IDLE</div>
                     </div>
                 </section>
 
-                <!-- AI REASONING (The "Brain" Visibility) -->
-                <section class="reasoning-card" id="ai-reasoning-box">
-                    <div class="stat-label">
-                        <i class="fas fa-brain"></i> AI Reasoning Engine 
-                        <span class="thinking-pulse" id="thinking-indicator" style="display:none; margin-left: 10px;"></span>
-                    </div>
-                    <div class="reasoning-list" id="reasoning-log">
-                        <div class="reason-item"><span>Status:</span> System Idle</div>
-                    </div>
-                </section>
-
-                <!-- STRUCTURED SUMMARY -->
-                <section class="reasoning-card">
-                    <div class="stat-label"><i class="fas fa-list-check"></i> Structured Extraction</div>
-                    <div class="summary-grid">
+                <!-- STRUCTURED SUMMARY (Fixed height, scrollable) -->
+                <section class="reasoning-card structured-card">
+                    <div class="stat-label"><i class="fas fa-list-check"></i> Structured Information</div>
+                    <div class="summary-grid scrollable-inner">
                         <div class="field-group">
                             <label class="stat-label">Intent</label>
                             <input type="text" id="field-intent" placeholder="...">
@@ -105,47 +100,57 @@
                     </div>
                 </section>
 
-                <!-- VERIFICATION LOOP -->
+                <!-- VERIFICATION LOOP & CORRECTION -->
                 <section class="verification-card" id="verification-loop" style="display: none;">
                     <div class="stat-label"><i class="fas fa-shield-check"></i> AI CONFIRMATION PROMPT</div>
                     <div class="v-sentence" id="confirmation-sentence">Verifying extracted details...</div>
-                    <div class="v-actions">
+                    <div class="v-actions" id="v-main-actions">
                         <button class="v-btn correct" id="btn-correct"><i class="fas fa-check-circle"></i> CORRECT</button>
                         <button class="v-btn" id="btn-partial"><i class="fas fa-adjust"></i> PARTIAL</button>
                         <button class="v-btn" id="btn-wrong"><i class="fas fa-times-circle"></i> WRONG</button>
                     </div>
+                    
+                    <!-- Appears when agent clicks 'Correct' -->
+                    <div id="submit-human-area" style="display: none; margin-top: 15px;">
+                        <button id="btn-submit-human" class="v-btn" style="width: 100%; background: var(--accent-primary); border: none;">
+                            <i class="fas fa-paper-plane"></i> SUBMIT TO HUMAN AGENT
+                        </button>
+                    </div>
                 </section>
+
+                <!-- CITIZEN CORRECTION (Reused for agent input if needed) -->
+                <div id="correction-area" style="display: none; margin-top: 20px; animation: slideIn 0.3s ease; padding: 20px; background: rgba(255, 65, 108, 0.05); border-radius: 12px; border: 1px solid var(--danger);">
+                    <p class="stat-label" style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> What did we get wrong?</p>
+                    <input type="text" id="citizen-correction-input" placeholder="Enter correction here..." autocomplete="off" style="width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white;">
+                    <button id="btn-submit-correction" class="v-btn" style="margin-top: 15px; font-size: 0.8rem; border-color: var(--danger); background: rgba(255, 65, 108, 0.2);">
+                        SUBMIT CORRECTION
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- 3. RIGHT COLUMN: Vertical Pipeline -->
+        <aside class="col-right">
+            <div class="stat-label" style="margin-bottom: 20px; text-align: center;">Pipeline</div>
+            <div class="pipeline-vertical">
+                <div class="step active" id="step-listening"><i>1</i> <span>Listening</span></div>
+                <div class="step" id="step-transcribing"><i>2</i> <span>Transcribing</span></div>
+                <div class="step" id="step-thinking"><i>3</i> <span>Reasoning</span></div>
+                <div class="step" id="step-verifying"><i>4</i> <span>Verifying</span></div>
+                <div class="step" id="step-final"><i>5</i> <span>Final Action</span></div>
             </div>
 
-            <!-- SIDEBAR METADATA -->
-            <aside class="metadata-sidebar">
-                <div class="stat-card">
-                    <div class="stat-label">AI Confidence</div>
-                    <div class="stat-val" id="confidence-val">0%</div>
-                    <p class="stat-label" id="confidence-status" style="margin-top: 0;">--</p>
+            <!-- Optional: Keep AI reasoning logs here or somewhere else, keeping it at the bottom of right column -->
+            <section class="reasoning-card" id="ai-reasoning-box" style="margin-top: auto;">
+                <div class="stat-label">
+                    <i class="fas fa-brain"></i> AI Reasoning 
+                    <span class="thinking-pulse" id="thinking-indicator" style="display:none; margin-left: 10px;"></span>
                 </div>
-
-                <div class="stat-card" id="urgency-card">
-                    <div class="stat-label">Urgency Level</div>
-                    <div class="stat-val val-low" id="urgency-val">LOW</div>
+                <div class="reasoning-list" id="reasoning-log">
+                    <div class="reason-item"><span>Status:</span> System Idle</div>
                 </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Sentiment / Emotion</div>
-                    <div class="stat-val" id="emotion-val">NEUTRAL</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Suggested Workflow</div>
-                    <div id="suggested-action" style="font-weight: 700; color: var(--accent-secondary); margin-top: 10px;">IDLE</div>
-                </div>
-
-                <button id="escalate-btn" class="v-btn">
-                    <i class="fas fa-headset"></i> ESCALATE TO HUMAN
-                </button>
-            </aside>
-
-        </main>
+            </section>
+        </aside>
     </div>
 
     <!-- Scripts -->
@@ -157,4 +162,5 @@
     <script src="js/app.js"></script>
 </body>
 </html>
+
 

@@ -43,7 +43,24 @@ app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="
 
 
 @app.get("/")
-async def serve_index():
+async def serve_landing():
+    landing_path = FRONTEND_DIR / "landing.html"
+    if landing_path.exists():
+        return FileResponse(str(landing_path))
+    # Fallback if landing not created yet
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+
+@app.get("/main")
+async def serve_main():
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+
+@app.get("/final")
+async def serve_final():
+    final_path = FRONTEND_DIR / "final.html"
+    if final_path.exists():
+        return FileResponse(str(final_path))
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
@@ -235,22 +252,59 @@ async def _process_audio(ws: WebSocket, session_id: str, audio_bytes: bytes, lan
 async def _run_llm_pipeline(ws: WebSocket, session_id: str, transcript: str,
                             language: str, stt_confidence: float):
     """LLM semantic extraction + emotion + guardrails."""
+    
+    try:
+        # LLM processing
+        logger.info(f"[{session_id}] Starting LLM pipeline...")
+        await _send(ws, "status", {"message": "Analyzing meaning & emotion...", "state": "analyzing"})
+        
+        logger.info(f"[{session_id}] Calling llm.process_transcript...")
+        llm_result = await llm.process_transcript(transcript, language)
+        
+        logger.info(f"[{session_id}] LLM Result received: {llm_result}")
 
-    # LLM processing
-    await _send(ws, "status", {"message": "Analyzing meaning & emotion...", "state": "analyzing"})
-    llm_result = await llm.process_transcript(transcript, language)
+        # Store structured data
+        logger.info(f"[{session_id}] Updating structured data...")
+        verifier.update_structured_data(session_id, llm_result)
+        
+        logger.info(f"[{session_id}] Sending structured_summary event...")
+        await _send(ws, "structured_summary", {"data": llm_result})
+        logger.info(f"[{session_id}] structured_summary sent successfully")
 
-    # Store structured data
-    verifier.update_structured_data(session_id, llm_result)
-    await _send(ws, "structured_summary", {"data": llm_result})
+        # Emotion scoring - convert LLM emotion string to dict format
+        logger.info(f"[{session_id}] Analyzing keywords...")
+        kw_analysis = emotion_detector.analyze_keywords(transcript)
+        
+        # Build llm_emotion dict from LLM result fields
+        logger.info(f"[{session_id}] Building emotion dict...")
+        llm_emotion = {
+            "emotion": llm_result.get("emotion", "neutral"),  # String like "distress"
+            "urgency_level": llm_result.get("urgency_level", "medium"),  # String like "high"
+            "distress_indicators": [llm_result.get("emotion", "neutral")],  # List
+            "primary": llm_result.get("emotion", "neutral"),  # For backwards compatibility
+        }
+        logger.info(f"[{session_id}] LLM Emotion dict: {llm_emotion}")
+        
+        logger.info(f"[{session_id}] Combining emotion scores...")
+        emotion_scores = emotion_detector.combine_scores(llm_emotion, kw_analysis, stt_confidence)
+        logger.info(f"[{session_id}] Combined emotion scores: {emotion_scores}")
 
-    # Emotion scoring
-    kw_analysis = emotion_detector.analyze_keywords(transcript)
-    llm_emotion = llm_result.get("emotion", {})
-    emotion_scores = emotion_detector.combine_scores(llm_emotion, kw_analysis, stt_confidence)
-
-    verifier.update_emotion(session_id, emotion_scores)
-    await _send(ws, "emotion", emotion_scores)
+        logger.info(f"[{session_id}] Updating emotion...")
+        verifier.update_emotion(session_id, emotion_scores)
+        
+        logger.info(f"[{session_id}] Sending emotion event...")
+        await _send(ws, "emotion", emotion_scores)
+        logger.info(f"[{session_id}] emotion event sent successfully")
+        
+        # Send completion status
+        logger.info(f"[{session_id}] LLM pipeline complete, sending verification prompt...")
+        await _send(ws, "status", {"message": "Analysis Complete - Ready for Verification", "state": "verified"})
+        await _send(ws, "verification_prompt", {"message": "Please review and confirm the extracted information."})
+        
+    except Exception as e:
+        logger.error(f"[{session_id}] LLM Pipeline Error: {e}", exc_info=True)
+        await _send(ws, "error", {"message": f"Analysis failed: {str(e)}"})
+        raise
 
     # Guardrails check
     session = verifier.get_session(session_id)

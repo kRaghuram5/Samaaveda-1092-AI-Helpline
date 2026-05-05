@@ -29,8 +29,11 @@ class WebSocketClient {
                     this.handlers[data.type](data);
                 }
             } catch (err) {
-                // If not JSON, it's likely binary or a raw status
-                console.debug('[WS] Non-JSON message received');
+                if (err instanceof SyntaxError) {
+                    console.debug('[WS] Non-JSON message received');
+                } else {
+                    console.error('[WS] Error processing message:', err);
+                }
             }
         };
 

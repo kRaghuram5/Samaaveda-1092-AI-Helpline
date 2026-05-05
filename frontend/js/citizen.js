@@ -49,6 +49,11 @@ class CitizenUI {
     }
 
     async startRecording() {
+        // Clear previous state if it exists
+        if (window.app) {
+            window.app.resetUIForNewCase();
+        }
+        
         try {
             const ok = await window.audioCapture.start(this.selectedLanguage);
             if (ok) {
