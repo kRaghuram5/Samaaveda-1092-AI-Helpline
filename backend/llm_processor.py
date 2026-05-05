@@ -4,7 +4,7 @@ LLM Processor - Simplified version for basic API calls.
 import json
 import logging
 import asyncio
-from google import genai
+import google.generativeai as genai
 from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
