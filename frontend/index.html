@@ -8,29 +8,29 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     
     <!-- 1. TOP PIPELINE BAR -->
-    <div class="pipeline-container">
-        <div class="step active" id="step-listening"><i>1</i> LISTENING</div>
-        <div class="step" id="step-transcribing"><i>2</i> TRANSCRIBING</div>
-        <div class="step" id="step-thinking"><i>3</i> THINKING</div>
-        <div class="step" id="step-verifying"><i>4</i> VERIFYING</div>
-        <div class="step" id="step-final"><i>5</i> AGENT ACTION</div>
-    </div>
+    <nav class="pipeline-container">
+        <div class="step active" id="step-listening"><i>1</i> <span>Listening</span></div>
+        <div class="step" id="step-transcribing"><i>2</i> <span>Transcribing</span></div>
+        <div class="step" id="step-thinking"><i>3</i> <span>Reasoning</span></div>
+        <div class="step" id="step-verifying"><i>4</i> <span>Verifying</span></div>
+        <div class="step" id="step-final"><i>5</i> <span>Final Action</span></div>
+    </nav>
 
     <div id="app">
         <!-- 2. CITIZEN VIEW (LEFT) -->
         <aside class="citizen-panel">
             <div class="panel-header">
-                <h3>👤 CITIZEN VIEW</h3>
-                <p class="stat-label">Caller Interface</p>
+                <h3><i class="fas fa-user-shield"></i> CITIZEN VIEW</h3>
+                <p class="stat-label">Secure Caller Interface</p>
             </div>
 
             <div class="lang-selector">
-                <button class="lang-btn active" data-lang="auto">Auto</button>
+                <button class="lang-btn active" data-lang="auto">AUTO</button>
                 <button class="lang-btn" data-lang="kn">ಕನ್ನಡ</button>
                 <button class="lang-btn" data-lang="hi">हिंदी</button>
                 <button class="lang-btn" data-lang="en">ENG</button>
@@ -38,19 +38,23 @@
 
             <div class="mic-section">
                 <canvas id="visualizer"></canvas>
-                <button id="mic-btn"><i class="fas fa-microphone"></i></button>
-                <p id="status-text">Ready to assist</p>
+                <button id="mic-btn" title="Click to speak">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <p id="status-text">System Ready</p>
             </div>
 
             <div class="citizen-preview">
-                <div class="lang-badge" id="citizen-lang">KANNADA</div>
-                <p id="live-transcript-preview" style="font-style: italic; color: var(--text-dim);">Speak to begin...</p>
+                <div class="stat-label" style="color: var(--accent-secondary);">Live Transcript</div>
+                <p id="live-transcript-preview" style="font-size: 0.95rem; line-height: 1.5; color: var(--text-dim);">Awaiting voice input...</p>
                 
-                <!-- NEW: CORRECTION AREA -->
-                <div id="correction-area" style="display: none; margin-top: 15px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
-                    <p class="stat-label" style="color: var(--danger);">What did we get wrong?</p>
-                    <input type="text" id="citizen-correction-input" placeholder="Type correction here..." style="width: 100%; padding: 8px; background: #161b22; border: 1px solid var(--danger); color: white; border-radius: 4px; margin-top: 5px;">
-                    <button id="btn-submit-correction" class="v-btn" style="margin-top: 10px; font-size: 0.7rem; padding: 5px;">SUBMIT CORRECTION</button>
+                <!-- CORRECTION AREA -->
+                <div id="correction-area" style="display: none; margin-top: 20px; animation: slideIn 0.3s ease;">
+                    <p class="stat-label" style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> What did we get wrong?</p>
+                    <input type="text" id="citizen-correction-input" placeholder="Enter correction here..." autocomplete="off">
+                    <button id="btn-submit-correction" class="v-btn" style="margin-top: 10px; font-size: 0.8rem; border-color: var(--danger); background: rgba(255, 65, 108, 0.1);">
+                        SUBMIT CORRECTION
+                    </button>
                 </div>
             </div>
         </aside>
@@ -60,80 +64,83 @@
             
             <div class="main-content">
                 <!-- LIVE TRANSCRIPT -->
-                <div class="reasoning-card">
-                    <div class="stat-label">📝 Live Transcript</div>
-                    <div id="full-transcript" style="font-size: 1.1rem; margin-top: 10px; line-height: 1.6;">
+                <section class="reasoning-card">
+                    <div class="stat-label"><i class="fas fa-comment-dots"></i> Incoming Stream</div>
+                    <div id="full-transcript" style="font-size: 1.2rem; font-weight: 500; line-height: 1.6; color: white;">
                         Waiting for caller...
                     </div>
-                </div>
+                </section>
 
                 <!-- AI REASONING (The "Brain" Visibility) -->
-                <div class="reasoning-card" id="ai-reasoning-box">
-                    <div class="stat-label">🧠 AI Reasoning Engine <span class="thinking-pulse" id="thinking-indicator" style="display:none;"></span></div>
-                    <div class="reasoning-list" id="reasoning-log">
-                        <div class="reason-item"><span>Status:</span> Idle</div>
+                <section class="reasoning-card" id="ai-reasoning-box">
+                    <div class="stat-label">
+                        <i class="fas fa-brain"></i> AI Reasoning Engine 
+                        <span class="thinking-pulse" id="thinking-indicator" style="display:none; margin-left: 10px;"></span>
                     </div>
-                </div>
+                    <div class="reasoning-list" id="reasoning-log">
+                        <div class="reason-item"><span>Status:</span> System Idle</div>
+                    </div>
+                </section>
 
-                <!-- STRUCTURED SUMMARY (EDITABLE) -->
-                <div class="reasoning-card">
-                    <div class="stat-label">📋 Structured Summary</div>
-                    <div class="summary-grid" style="margin-top: 15px;">
+                <!-- STRUCTURED SUMMARY -->
+                <section class="reasoning-card">
+                    <div class="stat-label"><i class="fas fa-list-check"></i> Structured Extraction</div>
+                    <div class="summary-grid">
                         <div class="field-group">
-                            <label>INTENT</label>
+                            <label class="stat-label">Intent</label>
                             <input type="text" id="field-intent" placeholder="...">
                         </div>
                         <div class="field-group">
-                            <label>ISSUE TYPE</label>
+                            <label class="stat-label">Issue Type</label>
                             <input type="text" id="field-issue-type" placeholder="...">
                         </div>
                         <div class="field-group">
-                            <label>LOCATION</label>
+                            <label class="stat-label">Location</label>
                             <input type="text" id="field-location" placeholder="...">
                         </div>
                         <div class="field-group">
-                            <label>DURATION</label>
+                            <label class="stat-label">Duration</label>
                             <input type="text" id="field-duration" placeholder="...">
                         </div>
                     </div>
-                </div>
+                </section>
 
-                <!-- VERIFICATION LOOP (THE WINNING FEATURE) -->
-                <div class="verification-card" id="verification-loop" style="display: none;">
-                    <div class="stat-label" style="color: var(--accent-blue);"><i class="fas fa-sync"></i> AI CONFIRMATION PROMPT</div>
-                    <div class="v-sentence" id="confirmation-sentence">---</div>
+                <!-- VERIFICATION LOOP -->
+                <section class="verification-card" id="verification-loop" style="display: none;">
+                    <div class="stat-label"><i class="fas fa-shield-check"></i> AI CONFIRMATION PROMPT</div>
+                    <div class="v-sentence" id="confirmation-sentence">Verifying extracted details...</div>
                     <div class="v-actions">
-                        <button class="v-btn correct" id="btn-correct"><i class="fas fa-check"></i> CORRECT</button>
+                        <button class="v-btn correct" id="btn-correct"><i class="fas fa-check-circle"></i> CORRECT</button>
                         <button class="v-btn" id="btn-partial"><i class="fas fa-adjust"></i> PARTIAL</button>
-                        <button class="v-btn" id="btn-wrong"><i class="fas fa-times"></i> WRONG</button>
+                        <button class="v-btn" id="btn-wrong"><i class="fas fa-times-circle"></i> WRONG</button>
                     </div>
-                </div>
+                </section>
             </div>
 
             <!-- SIDEBAR METADATA -->
             <aside class="metadata-sidebar">
-                <div class="stat-card" id="confidence-card">
+                <div class="stat-card">
                     <div class="stat-label">AI Confidence</div>
                     <div class="stat-val" id="confidence-val">0%</div>
-                    <div class="stat-label" id="confidence-status">--</div>
+                    <p class="stat-label" id="confidence-status" style="margin-top: 0;">--</p>
                 </div>
 
                 <div class="stat-card" id="urgency-card">
-                    <div class="stat-label">Urgency</div>
+                    <div class="stat-label">Urgency Level</div>
                     <div class="stat-val val-low" id="urgency-val">LOW</div>
                 </div>
 
                 <div class="stat-card">
-                    <div class="stat-label">Emotion</div>
+                    <div class="stat-label">Sentiment / Emotion</div>
                     <div class="stat-val" id="emotion-val">NEUTRAL</div>
                 </div>
 
                 <div class="stat-card">
-                    <div class="stat-label">Suggested Action</div>
-                    <div id="suggested-action" style="font-weight: 600; color: var(--accent-blue);">WAITING...</div>
+                    <div class="stat-label">Suggested Workflow</div>
+                    <div id="suggested-action" style="font-weight: 700; color: var(--accent-secondary); margin-top: 10px;">IDLE</div>
                 </div>
 
-                <button id="escalate-btn" class="v-btn" style="background: var(--danger); border: none; margin-top: auto;">
+                <button id="escalate-btn" class="v-btn">
                     <i class="fas fa-headset"></i> ESCALATE TO HUMAN
                 </button>
             </aside>
@@ -150,3 +157,4 @@
     <script src="js/app.js"></script>
 </body>
 </html>
+

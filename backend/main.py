@@ -290,6 +290,6 @@ async def _send(ws: WebSocket, msg_type: str, data: dict):
 if __name__ == "__main__":
     import uvicorn
     try:
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+        uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
     except KeyboardInterrupt:
         logger.info("Samaaveda server stopped by user. Goodbye!")

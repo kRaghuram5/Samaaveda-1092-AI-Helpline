@@ -58,9 +58,10 @@ class VerificationEngine:
 
         session["verification_attempts"] += 1
 
-        if response == "correct":
+        if response in ["correct", "yes"]:
             session["state"] = VerificationState.CONFIRMED
-            return {"state": "confirmed", "message": "Understanding verified ✓", "action": "proceed"}
+            return {"state": "confirmed", "message": "Understanding verified ✓", "action": "confirm"}
+
 
         if response == "partial":
             session["state"] = VerificationState.PARTIAL
@@ -69,7 +70,7 @@ class VerificationEngine:
             return {"state": "partial", "message": "Partial — correction noted",
                     "action": "re_process", "correction": correction}
 
-        if response == "incorrect":
+        if response in ["incorrect", "no"]:
             session["state"] = VerificationState.DENIED
             if correction:
                 session["corrections"].append(correction)

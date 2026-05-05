@@ -10,11 +10,14 @@ logger = logging.getLogger(__name__)
 DISTRESS_KEYWORDS = {
     "en": ["help", "emergency", "urgent", "dying", "please", "desperate",
            "suffering", "terrible", "worst", "dangerous", "scared", "afraid", "panic",
-           "flooding", "flowing", "entering", "kids", "children", "broken pipe"],
+           "flooding", "flowing", "entering", "kids", "children", "broken pipe",
+           "water", "electricity", "power", "current", "no supply"],
     "hi": ["madad", "bachao", "jaldi", "mushkil", "takleef", "pareshani",
-           "dar", "khatra", "madat", "sahayata", "khatarnak", "baadh", "paani ghus raha"],
+           "dar", "khatra", "madat", "sahayata", "khatarnak", "baadh", "paani ghus raha",
+           "bijli", "paani", "current nahi"],
     "kn": ["sahaya", "bega", "tumba", "kashta", "sankate", "bhaya", "apaaya",
-           "doddadu", "tondare", "neeru nuuguttide", "makkalu", "manege"],
+           "doddadu", "tondare", "neeru nuuguttide", "makkalu", "manege",
+           "current", "vidyut", "neeru", "illa"],
 }
 
 ANGER_KEYWORDS = {
@@ -48,8 +51,8 @@ class EmotionDetector:
                     matched.append(kw)
 
         # Urgency patterns
-        for pat in [r"!{2,}", r"\b(immediately|right now|asap|today|now|soon)\b",
-                     r"\b(jaldi|abhi|turant|bega|tumba bega)\b",
+        for pat in [r"!{2,}", r"\b(immediately|right now|asap|today|now|soon|urgent|emergency|die|death)\b",
+                     r"\b(jaldi|abhi|turant|bega|tumba bega|sattoguttare|apaaya)\b",
                      r"\b(flowing|flooding|entering|nuuguttide)\b"]:
             if re.search(pat, text_lower):
                 urgency_score += 1
@@ -59,6 +62,7 @@ class EmotionDetector:
             "anger_score": min(anger_score / 5.0, 1.0),
             "urgency_score": min(urgency_score / 3.0, 1.0),
             "matched_keywords": list(set(matched)),
+            "raw_text": text_lower,
         }
 
     def combine_scores(self, llm_emotion: dict, keyword_analysis: dict,
@@ -82,9 +86,11 @@ class EmotionDetector:
         combined_urgency = llm_urg * 0.6 + keyword_analysis["urgency_score"] * 0.4
 
         # --- URGENCY BOOSTER (The Edge Case Fix) ---
-        booster_words = ["nuuguttide", "nuuguttidd", "flooding", "children", "makkalu", "manege", "entering"]
+        booster_words = ["nuuguttide", "nuuguttidd", "flooding", "children", "makkalu", "manege", "entering", 
+                         "urgent", "emergency", "die", "death", "sattoguttare"]
         if any(word in keyword_analysis["matched_keywords"] for word in booster_words) or \
-           any(word in llm_emotion.get("distress_indicators", []) for word in booster_words):
+           any(word in llm_emotion.get("distress_indicators", []) for word in booster_words) or \
+           any(re.search(r"\b(" + word + r")\b", text_lower := keyword_analysis.get("raw_text", "")) for word in booster_words):
             combined_urgency = max(combined_urgency, 0.95) # Force to Critical
             logger.info("Urgency Booster triggered: Property/Safety risk detected.")
 
@@ -105,11 +111,22 @@ class EmotionDetector:
         if overall_confidence < 0.5:
             reasons.append("Low overall understanding confidence")
 
+        # Convert score back to level for UI
+        if combined_urgency >= 0.8:
+            urgency_level = "critical"
+        elif combined_urgency >= 0.6:
+            urgency_level = "high"
+        elif combined_urgency >= 0.3:
+            urgency_level = "medium"
+        else:
+            urgency_level = "low"
+
         return {
             "primary_emotion": primary,
             "secondary_emotion": llm_emotion.get("secondary"),
             "severity_score": round(combined_severity, 3),
             "urgency_score": round(combined_urgency, 3),
+            "urgency_level": urgency_level,
             "overall_confidence": round(overall_confidence, 3),
             "needs_escalation": needs_escalation,
             "escalation_reason": "; ".join(reasons) if reasons else None,

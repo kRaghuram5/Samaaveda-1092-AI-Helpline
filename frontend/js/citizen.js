@@ -30,6 +30,22 @@ class CitizenUI {
                 await this.startRecording();
             }
         });
+
+        // Correction button
+        document.getElementById('btn-submit-correction').addEventListener('click', () => {
+            const correction = document.getElementById('citizen-correction-input').value;
+            if (correction) {
+                console.log('[Citizen] Submitting correction:', correction);
+                window.wsClient.sendJSON({ 
+                    type: 'verification_response', 
+                    response: 'partial', // Assume partial if they are correcting
+                    correction: correction 
+                });
+                // Clear and hide
+                document.getElementById('citizen-correction-input').value = '';
+                document.getElementById('correction-area').style.display = 'none';
+            }
+        });
     }
 
     async startRecording() {
