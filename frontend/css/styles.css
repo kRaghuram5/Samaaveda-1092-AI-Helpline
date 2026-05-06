@@ -59,27 +59,33 @@ body {
 #app-container {
     display: grid;
     grid-template-columns: 280px 1fr 300px; /* Left narrow, Middle wide, Right fixed */
+    gap: 25px;
+    padding: 25px;
     flex: 1;
     overflow: hidden;
 }
 
 /* --- COLUMNS --- */
 .col-left, .col-middle, .col-right {
-    padding: 30px;
+    padding: 25px;
     display: flex;
     flex-direction: column;
     gap: 20px;
     height: 100%;
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
 }
 
 .col-left {
-    background: rgba(10, 15, 25, 0.8);
-    border-right: 1px solid var(--glass-border);
+    background: rgba(10, 15, 25, 0.6);
     backdrop-filter: blur(20px);
+    overflow-y: auto; /* Enable vertical scrolling */
 }
 
 .col-middle {
     overflow: hidden; /* We scroll inner content */
+    background: rgba(10, 15, 25, 0.4);
+    backdrop-filter: blur(10px);
 }
 
 .middle-scrollable {
@@ -92,9 +98,26 @@ body {
 }
 
 .col-right {
-    background: rgba(10, 15, 25, 0.4);
-    border-left: 1px solid var(--glass-border);
+    background: rgba(10, 15, 25, 0.6);
     backdrop-filter: blur(10px);
+    overflow-y: auto; /* Enable vertical scrolling */
+}
+
+/* --- SCROLLBAR STYLING --- */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(112, 0, 255, 0.5);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 210, 255, 0.8);
 }
 
 /* --- PIPELINE (Vertical) --- */
