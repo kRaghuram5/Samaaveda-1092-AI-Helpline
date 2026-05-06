@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class LLMProcessor:
     def __init__(self):
         genai.configure(api_key=GEMINI_API_KEY)
-        self.model_id = "gemini-1.5-flash"
+        self.model_id = "gemini-2.5-flash"
         logger.info(f"Using model: {self.model_id}")
 
     
@@ -57,11 +57,11 @@ Return ONLY VALID JSON (no markdown, no extra text):
                 logger.info(f"API Call attempt {attempt + 1}, model: {self.model_id}")
                 # Direct API call with error handling
                 try:
-                    logger.info("Calling genai.generate_content...")
+                    logger.info("Calling genai.GenerativeModel.generate_content...")
+                    model = genai.GenerativeModel(self.model_id)
                     response = await asyncio.to_thread(
-                        genai.generate_content,
-                        model=self.model_id,
-                        contents=prompt
+                        model.generate_content,
+                        prompt
                     )
                     logger.info(f"API Response received: {type(response)}")
                 except Exception as api_error:
